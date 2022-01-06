@@ -6,7 +6,7 @@
 
 %% internal
 -export([
-    add/5,
+    add/6,
     clear/2,
     delete/1,
     new/1,
@@ -15,16 +15,17 @@
 ]).
 
 %% internal
--spec add(table(), server_id(), external_request_id(), cast(), reference()) ->
+-spec add(table(), server_id(), external_request_id(),
+          cast(), reference(), span_ctx()) ->
     ok.
 
-add(Table, ServerId, ExtRequestId, Cast, TimerRef) ->
-    Object = {{ServerId, ExtRequestId}, {Cast, TimerRef}},
+add(Table, ServerId, ExtRequestId, Cast, TimerRef, SpanCtx) ->
+    Object = {{ServerId, ExtRequestId}, {Cast, TimerRef, SpanCtx}},
     ets:insert(Table, Object),
     ok.
 
 -spec clear(table(), server_id()) ->
-    [{cast(), reference()}].
+    [{cast(), reference(), span_ctx()}].
 
 clear(Table, ServerId) ->
     Match = {{ServerId, '_'}, '_'},
@@ -32,7 +33,8 @@ clear(Table, ServerId) ->
         [] ->
             [];
         Objects ->
-            [{Cast, TimerRef} || {_, {Cast, TimerRef}} <- Objects]
+            [{Cast, TimerRef, SpanCtx} ||
+             {_, {Cast, TimerRef, SpanCtx}} <- Objects]
     end.
 
 -spec delete(pool_name()) ->
@@ -51,14 +53,14 @@ new(PoolName) ->
     ok.
 
 -spec remove(table(), server_id(), external_request_id()) ->
-    {ok, cast(), reference()} | {error, not_found}.
+    {ok, cast(), reference(), span_ctx()} | {error, not_found}.
 
 remove(Table, ServerId, ExtRequestId) ->
     case ets_take(Table, {ServerId, ExtRequestId}) of
         [] ->
             {error, not_found};
-        [{_, {Cast, TimerRef}}] ->
-            {ok, Cast, TimerRef}
+        [{_, {Cast, TimerRef, SpanCtx}}] ->
+            {ok, Cast, TimerRef, SpanCtx}
     end.
 
 %% private

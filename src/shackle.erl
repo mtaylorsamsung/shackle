@@ -52,10 +52,12 @@ cast(PoolName, Request, Pid, Timeout) ->
     case shackle_pool:server(PoolName) of
         {ok, Client, Server} ->
             RequestId = {Server, make_ref()},
+            SpanCtx = shackle_trace:start(PoolName),
             Server ! {Request, #cast {
                 client = Client,
                 pid = Pid,
                 request_id = RequestId,
+                span_ctx = SpanCtx,
                 timeout = Timeout,
                 timestamp = Timestamp
             }},

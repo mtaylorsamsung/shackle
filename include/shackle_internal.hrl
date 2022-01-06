@@ -1,5 +1,6 @@
 -include("shackle.hrl").
 -include("shackle_defaults.hrl").
+-include_lib("opentelemetry_api/include/otel_tracer.hrl").
 
 %% macros
 -define(APP, shackle).

@@ -1,5 +1,5 @@
 {application, shackle, [
-  {applications, [kernel, stdlib, granderl, metal, foil, ssl]},
+  {applications, [kernel, stdlib, granderl, metal, opentelemetry_api, foil, ssl]},
   {description, "High-Performance Erlang Network Client Framework"},
   {env, []},
   {licenses, ["MIT"]},

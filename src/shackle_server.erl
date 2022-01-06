@@ -87,6 +87,7 @@ handle_msg({_, #cast {} = Cast}, {#state {
     reply({error, no_socket}, Cast, State),
     {ok, {State, ClientState}};
 handle_msg({Request, #cast {
+        span_ctx = SpanCtx,
         timeout = Timeout
     } = Cast}, {#state {
         client = Client,
@@ -96,7 +97,6 @@ handle_msg({Request, #cast {
         queue = Queue,
         socket = Socket
     } = State, ClientState}) ->
-
     try Client:handle_request(Request, ClientState) of
         {ok, ExtRequestId, Data, ClientState2} ->
             case Protocol:send(Socket, Data) of
@@ -109,12 +109,13 @@ handle_msg({Request, #cast {
                             Msg = {timeout, ExtRequestId},
                             TimerRef = erlang:send_after(Timeout, self(), Msg),
                             shackle_queue:add(Queue, Id, ExtRequestId, Cast,
-                                TimerRef)
+                                TimerRef, SpanCtx)
                     end,
                     {ok, {State, ClientState2}};
                 {error, Reason} ->
                     ?WARN(PoolName, "send error: ~p", [Reason]),
                     Protocol:close(Socket),
+                    shackle_trace:failed(SpanCtx, send),
                     reply({error, socket_closed}, Cast, State),
                     close(State, ClientState2)
             end
@@ -122,6 +123,7 @@ handle_msg({Request, #cast {
         ?EXCEPTION(E, R, Stacktrace) ->
             ?WARN(PoolName, "handle_request crash: ~p:~p~n~p~n",
                 [E, R, ?GET_STACK(Stacktrace)]),
+            shackle_trace:failed(SpanCtx, handle_request),
             reply({error, client_crash}, Cast, State),
             {ok, {State, ClientState}}
     end;
@@ -200,8 +202,9 @@ handle_msg({timeout, ExtRequestId}, {#state {
             end;
         false ->
             case shackle_queue:remove(Queue, Id, ExtRequestId) of
-                {ok, Cast, _TimerRef} ->
+                {ok, Cast, _TimerRef, SpanCtx} ->
                     ?METRICS(Client, counter, <<"timeout">>),
+                    shackle_trace:failed(SpanCtx, timeout),
                     reply({error, timeout}, Cast, State);
                 {error, not_found} ->
                     ok
@@ -366,11 +369,12 @@ process_responses([{ExtRequestId, Reply} | T], #state {
 
     ?METRICS(Client, counter, <<"replies">>),
     case shackle_queue:remove(Queue, Id, ExtRequestId) of
-        {ok, #cast {timestamp = Timestamp} = Cast, TimerRef} ->
+        {ok, #cast {timestamp = Timestamp} = Cast, TimerRef, SpanCtx} ->
             ?METRICS(Client, counter, <<"found">>),
             Diff = timer:now_diff(os:timestamp(), Timestamp),
             ?METRICS(Client, timing, <<"reply">>, Diff),
             erlang:cancel_timer(TimerRef),
+            shackle_trace:finished(SpanCtx),
             reply(Reply, Cast, State);
         {error, not_found} ->
             ?METRICS(Client, counter, <<"not_found">>, 1),
@@ -464,7 +468,8 @@ reply_all(Reply, #state {
 
 reply_all(_Reply, [], _State) ->
     ok;
-reply_all(Reply, [{Cast, TimerRef} | T], State) ->
+reply_all(Reply = {error, Status}, [{Cast, TimerRef, SpanCtx} | T], State) ->
     erlang:cancel_timer(TimerRef),
+    shackle_trace:failed(SpanCtx, Status),
     reply(Reply, Cast, State),
     reply_all(Reply, T, State).
