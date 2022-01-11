@@ -1,6 +1,6 @@
 -module(shackle_trace).
 -include("shackle_internal.hrl").
-
+-include_lib("opentelemetry_api/include/opentelemetry.hrl").
 
 -export([start/1, finished/1, failed/2]).
 

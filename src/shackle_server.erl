@@ -97,6 +97,7 @@ handle_msg({Request, #cast {
         queue = Queue,
         socket = Socket
     } = State, ClientState}) ->
+    ?set_current_span(SpanCtx),
     try Client:handle_request(Request, ClientState) of
         {ok, ExtRequestId, Data, ClientState2} ->
             case Protocol:send(Socket, Data) of

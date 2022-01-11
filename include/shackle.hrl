@@ -1,4 +1,3 @@
--include_lib("opentelemetry_api/include/opentelemetry.hrl").
 
 %% records
 -record(cast, {
@@ -66,7 +65,7 @@
 -type server_id() :: {pool_name(), server_index()}.
 -type server_name() :: atom().
 -type server_opts() :: {pool_name(), server_index(), client(), client_options()}.
--type span_ctx() :: #span_ctx {}.
+-type span_ctx() :: term().
 -type socket() :: inet:socket() | ssl:sslsocket().
 -type socket_option() :: gen_tcp:connect_option() | gen_udp:option() | ssl:connect_option().
 -type socket_options() :: [socket_option()].
